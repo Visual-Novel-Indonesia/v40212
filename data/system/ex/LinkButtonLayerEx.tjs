@@ -1,0 +1,195 @@
+class LinkButtonLayerEx extends LinkButtonLayer
+{
+
+	var Butt_showMouseDownImage = true;	// マウスが押されたとき画像を変更するか
+	var Butt_showMouseOnImage = true;	// マウスが侵入したとき画像を変更するか
+	var Butt_showFlagImage = false;		// 指定変数が要求値を満たすとき画像を変更するか
+	var Butt_flag = void;				// フラグ判別スクリプト
+	var Butt_text = void;				// ボタン描画テキスト
+	var Butt_textColor = void;			// ボタン描画テキスト色
+	var Butt_enable = true;				// ボタンが有効か
+
+	/* コンストラクタオーバライド */
+	function LinkButtonLayerEx(win, par)
+	{
+		super.LinkButtonLayer(...);
+	}
+
+	function finalize()
+	{
+		super.finalize(...);
+	}
+
+	function assign(src)
+	{
+		// src の情報をこのボタンレイヤにコピー
+		Butt_showMouseDownImage = src.Butt_showMouseDownImage;
+		Butt_showMouseOnImage = src.Butt_showMouseOnImage;
+		Butt_showFlagImage = src.Butt_showFlagImage;
+		Butt_flag = src.Butt_flag;
+		Butt_text = src.Butt_text;
+		Butt_textColor = src.Butt_textColor;
+		Butt_enable = src.Butt_enable;
+		super.assign(...);
+	}
+
+	/* マウスメッセージ透過 */
+	function onMouseDown(x, y, button, shift)
+	{
+		if(button == mbLeft)
+		{
+			if(enable && enabled && !parent.selProcessLock && window.inStable)
+			{
+				super.onMouseDown(...);
+			}
+			else
+			{
+				window.onPrimaryClick();
+			}
+		}
+		else
+		{
+			parent.onMouseDown(...);
+		}
+	}
+
+	function onMouseEnter()
+	{
+		parent.keyLink = linkNum;
+		if(window.inStable && Butt_enable)
+		{
+			cursor = window.cursorPointed;
+			super.onMouseEnter(...);
+		}
+		else
+			if(cursor == window.cursorPointed) cursor = crDefault;
+	}
+
+	/* マウスが離れた時にフォーカス情報を消す */
+	function onMouseLeave()
+	{
+		parent.keyLink = -1;
+		super.onMouseLeave(...);
+	}
+
+	function draw()
+	{
+		// 現在の状態にあわせて描画を行う
+/*
+		if(Butt_mouseDown) drawState(1);
+		else if(Butt_mouseOn) drawState(2);
+		else if(Butt_showFocusImage && focused) drawState(3);
+*/
+		if(!Butt_enable) { drawState(0); return; }
+
+		var s = 0;
+		if(Butt_showMouseDownImage)
+		{
+			s++;
+			if(Butt_mouseDown) { drawState(s); return; }
+		}
+		if(Butt_showMouseOnImage)
+		{
+			s++;
+			if(Butt_mouseOn) { drawState(s); return; }
+		}
+		if(Butt_showFocusImage)
+		{
+			s++;
+			if(focused) { drawState(s); return; }
+		}
+		// TODO ONイベント化
+		if(Butt_showFlagImage)
+		{
+			s++;
+			if(flag) { drawState(s); return; }
+		}
+		drawState(0);
+	}
+
+	function loadImages(storage, key)
+	{
+		// 画像を読み込む
+//		super.loadImages(storage, key);
+//		super.width = imageWidth \ (Butt_showFocusImage ? 4 : 3);
+		var cnt = buttonSize;
+		if(Butt_text !== void)
+		{
+			// 一時使用用のレイヤを得る
+			var temp = window.temporaryLayer;
+			temp.loadImages(storage, key);
+			temp.setSizeToImageSize();
+			this.font.height=25;
+			var textLeftMargin = (temp.width - this.font.getTextWidth(Butt_text)) \ 2;
+			var textTopMargin = (temp.height - this.font.getTextHeight(Butt_text)) \ 2;
+			this.width = temp.width * cnt;
+			this.height = temp.height;
+			// 通常
+			this.copyRect(0, 0, temp, 0, 0, temp.width, temp.height);
+			this.drawText(textLeftMargin, textTopMargin, text, Butt_textColor, 255, true, 3000, 0x000000, 1, 0, 0);
+			// onClick
+			temp.adjustGamma(0.5, 0, 255, 0.5, 0, 255, 1, 0, 255);
+			this.copyRect(temp.width, 0, temp, 0, 0, temp.width, temp.height);
+			this.drawText(textLeftMargin + temp.width, textTopMargin, text, Butt_textColor, 255, true, 3000, 0x000000, 1, 0, 0);
+			// onMouse
+			temp.adjustGamma(1.5, 0, 255, 1.5, 0, 255, 3, 0, 255);
+			this.copyRect(temp.width * 2, 0, temp, 0, 0, temp.width, temp.height);
+			this.drawText(textLeftMargin + temp.width * 2, textTopMargin, text, Butt_textColor, 255, true, 3000, 0x000000, 1, 0, 0);
+		}
+		else
+		{
+			super.loadImages(storage, key);
+		}
+		global.KAGLayer.width = imageWidth \ (cnt);
+		global.KAGLayer.height = imageHeight;
+		callOnPaint = true;
+		Butt_imageLoaded = true;
+	}
+
+	property showMouseDownImage
+	{
+		setter(x) { Butt_showMouseDownImage = x; }
+		getter { return Butt_showMouseDownImage; }
+	}
+
+	property showMouseOnImage
+	{
+		setter(x) { Butt_showMouseOnImage = x; }
+		getter { return Butt_showMouseOnImage; }
+	}
+
+	property showFlagImage
+	{
+		setter(x) { Butt_showFlagImage = x; }
+		getter { return Butt_showFlagImage; }
+	}
+
+	property flag
+	{
+		setter(x) { Butt_flag = x; }
+		getter { return Scripts.eval(Butt_flag); }
+	}
+
+	property text
+	{
+		setter(x) { Butt_text = x; }
+		getter { return Butt_text; }
+	}
+
+	property textColor
+	{
+		setter(x) { Butt_textColor = x; }
+		getter { return Butt_textColor; }
+	}
+
+	property enable
+	{
+		setter(x) { Butt_enable = x; }
+		getter { return Butt_enable; }
+	}
+	
+	property buttonSize
+	{
+		getter { return 1 + Butt_showMouseDownImage + Butt_showMouseOnImage + Butt_showFocusImage + Butt_showFlagImage; }
+	}
+}

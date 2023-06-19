@@ -1,0 +1,211 @@
+//セーブロード用関数
+function drawSaveLoad(mode)
+{
+	// 列に存在するセーブ数
+	var maxLine = 3;
+	// ジャンプ先
+	var target = "*" + mode + "action";
+
+	// ページ番号
+	kag.current.font.height = 15;
+	kag.current.drawText(692, 98, "PAGE" + (sf.save_now_page + 1), 0xffffff, 255, true, 2000, 0xe08207, 2, 0, 0);
+	// フォントサイズを小さいものにセット
+	kag.current.font.height = 10;
+	// ボタン描画
+	with(kag.tagHandlers) {
+		// タイトルへ戻る
+		.button(%[x:598, y:2, graphic:"button_return_t", target:"*ret_title", invalidDown:true]);
+		// ゲームへ戻る
+		if(!f.ftitle)
+			.button(%[x:696, y:2, graphic:"button_return_g", target:"*ret", invalidDown:true]);
+		// 前のページ
+		if(sf.save_now_page > 0)
+			.button(%[
+				x:15, y:2, graphic:"button_pager_prev", target:"*" + mode + "menu",
+				exp:"tf.trans_pager='prev'; sf.save_now_page--;", invalidDown:true
+			]);
+		// 次のページ
+		if(Math.ceil(kag.numBookMarks / sf.save_max_page) > sf.save_now_page + 1)
+			.button(%[
+				x:113, y:2, graphic:"button_pager_next", target:"*" + mode + "menu",
+				exp:"tf.trans_pager='next'; sf.save_now_page++;", invalidDown:true
+			]);
+	}
+
+	// リンクオブジェクトの数
+	var links = kag.current.links.length;
+
+	for(var i = 0; i < sf.save_max_page && i < kag.numBookMarks; i++) {
+		// セーブ番号
+		var saveNumber = sf.save_now_page * sf.save_max_page + i;
+		kag.tagHandlers.button(%[
+			x:i % maxLine * 240 + 70, y:i \ maxLine * 150 + 123, graphic:"button_save", target:target,
+			invalidDown:true,
+			exp:"tf.save_num = " + saveNumber
+		]);
+		var btn = kag.current.links[links + i].object;
+		btn.drawText(7, 4, "Ｎｏ." + "%02d".sprintf(saveNumber + 1), 0xffffff, 255, true, 200, 0xffffff);
+		btn.drawText(btn.width + 7, 4, "Ｎｏ." + "%02d".sprintf(saveNumber + 1), 0xffffff, 255, true, 200, 0xffffff);
+		if(kag.getBookMarkDate(saveNumber) != void) {
+			// サムネイル
+			var tmp = kag.tempLayer;
+			tmp.loadImages(kag.saveDataLocation + "/" + kag.dataName + saveNumber);
+			tmp.setSizeToImageSize();
+			btn.copyRect((btn.width - tmp.width) \ 2, (btn.height - tmp.height) \ 2, tmp, 0, 0, tmp.width, tmp.height);
+			tmp.adjustGamma(1, 0, 255, 2, 0, 255, 2, 0, 255);
+			btn.copyRect(btn.width + (btn.width - tmp.width) \ 2, (btn.height - tmp.height) \ 2, tmp, 0, 0, tmp.width, tmp.height);
+			// 保存日時
+			btn.drawText(10, btn.height - 15, "date：" + kag.getBookMarkDate(saveNumber), 0xffffff, 255, true, 200, 0xffffff);
+			btn.drawText(btn.width + 10, btn.height - 15, "date：" + kag.getBookMarkDate(saveNumber), 0xffffff, 255, true, 200, 0xffffff);
+			// 最新のデータならnewを表示
+			if(sf.save_last_data !== void && sf.save_last_data === saveNumber) {
+				btn.drawText(150, 4, "new!", 0xff0000, 255, true, 2000, 0xffffff, 1, 0, 0);
+				btn.drawText(btn.width + 150, 4, "new!", 0xff0000, 255, true, 2000, 0xffffff, 1, 0, 0);
+			}
+		} else if(mode == "load") {
+			btn.enable = false;
+		}
+	}
+}
+
+//メッセージ履歴ボイス再生用関数(流用)
+function hactElement(storage)
+{
+	// メッセージ履歴をクリックしたときに実行する TJS 式を生成する
+	return "kag.se[0].play(%[ storage : '" + storage + "' ])";
+}
+
+//メッセージレイヤー表示
+function showMessages(page)
+{
+	var i;
+	page = "fore" if page == "";
+	for(i=0;i<kag.fore.messages.count;i++){
+		kag[page].messages[i].visible = tf.msgHideInfo ? tf.msgHideInfo[i] : true;
+	}
+}
+
+//メッセージレイヤー消去
+function hideMessages(page)
+{
+	var i;
+	page = "fore" if page == "";
+	tf.msgHideInfo = [] if tf.msgHideInfo === void;
+	for(i=0;i<kag.fore.messages.count;i++){
+		tf.msgHideInfo[i] = kag[page].messages[i].visible;
+		kag[page].messages[i].visible=false;
+	}
+}
+
+//前景レイヤー消去
+function hideLayers(page)
+{
+	var i;
+	page = "fore" if page == "";
+	for(i=0;i<kag.fore.layers.count;i++){
+		kag[page].layers[i].visible=false;
+	}
+}
+
+//強制ジャンプ
+function clickSkip(){
+	kag.tagHandlers.stoptrans();
+	tf.skipRate = 0.2;
+}
+
+//スタッフロールキャンセル
+function cancelStaffRoll(){
+	kag.tagHandlers.stoptrans();
+	kag.tagHandlers.freeimage(%[layer:"base"]);
+	kag.tagHandlers.backlay(%[layer:"base"]);
+	tf.staff_roll_loop=false;
+	kag.leftClickHook.remove(cancelStaffRoll);
+}
+
+/*
+// 背景画像パラメータ
+var bgParam = [
+	%["vp" => 300, "ground" => 1200],, // デフォルト
+	%["vp" => 210, "ground" => 1200], // BG002
+	%["vp" => 305, "ground" => 1200], // BG003
+	%["vp" => 280, "ground" => 1200], // BG004
+	%["vp" => 200, "ground" => 1300], // BG005
+];
+*/
+
+if(debugMode) {
+	// 配列からイベントCG画像
+	this.mkEg = function(withFlag = true, withThumb = true) {
+		hideLayers("fore");
+		hideMessages("fore");
+		var storages = ["ev001a", "ev001b", "ev002a", "ev002b", "ev002d", "ev002c", "ev003a", "ev003b", "ev003c", "ev004a", "ev004b", "ev005a", "ev005b", "ev005c", "ev006a", "ev006b", "ev006c", "ev007a", "ev007b", "ev008a", "ev008b", "ev008c", "ev009a", "ev009b", "ev009c", "ev010a", "ev010b", "ev010c", "ev011a", "ev011b", "ev011c", "ev012a", "ev012b", "ev012c", "ev013a", "ev013b", "ev013c", "ev013d", "ev013e", "ev013f", "ev013g", "ev013h", "ev014a", "ev014b", "ev014c", "ev033a", "ev033c", "ev033d", "ev033e", "ev034a", "ev034b", "ev034c", "ev035a", "ev035b", "ev035c", "ev015a", "ev015b", "ev015c", "ev015d", "ev016a", "ev016b", "ev016c", "ev016d", "ev017a", "ev017b", "ev017c", "ev017d", "ev018a", "ev018b", "ev018c", "ev018d", "ev019a", "ev019b", "ev019c", "ev019d", "ev019e", "ev019f", "ev020a", "ev020b", "ev020c", "ev021a", "ev021b", "ev021c", "ev021d", "ev022a", "ev022b", "ev022c", "ev023a", "ev023b", "ev023c", "ev024a", "ev024b", "ev024c", "ev025a", "ev025b", "ev025c", "ev026a", "ev026b", "ev026c", "ev029a", "ev029b", "ev029c", "ev029d", "ev030a", "ev030b", "ev030c", "ev031a", "ev031b", "ev027a", "ev027b", "ev027c", "ev028a", "ev028b", "ev028c", "ev028d", "ev032a", "ev032b", "ev032c"];
+		var tempLayer = new Layer(kag, kag.fore.layers[0]);
+		tempLayer.setSize(106, 79);
+		for(var i=0; i<storages.count; i++) {
+			kag.fore.base.fillRect(0, 0, kag.innerWidth, kag.innerHeight, 0x000000);
+			kag.tagHandlers.ptext(%[x:90, y:190, layer:"base", size:150, text:storages[i]]);
+			kag.fore.base.saveLayerImage("evimage/" + storages[i] +".bmp", "bmp24");
+			if(withFlag) {
+				sf[storages[i]] = 1;
+				sf[storages[i].substring(0, 5)]++;
+			}
+			if(withThumb && storages[i].charAt(5) == "a") {
+				tempLayer.stretchCopy(0, 0, tempLayer.width, tempLayer.height, kag.fore.base, 0, 0, kag.innerWidth, kag.innerHeight);
+				tempLayer.saveLayerImage("evimage/s_" + storages[i] + ".bmp","bmp24");
+			}
+		}
+	} incontextof this;
+
+	// サムネイル作成
+	this.mkTg = function(number, width=106, height=80) {
+		var tempLayer = new Layer(kag, kag.fore.layers[0]);
+		var tmp = tempLayer;
+		for(var i=1;i<=number;i++)
+		{
+			tempLayer.loadImages("ev" + "%03d".sprintf(i) + "a");
+			tmp.stretchCopy(0, 0, width, height, tempLayer, 0, 0, 800, 600, stCubic);
+			tmp.setImageSize(width, height);
+			tmp.saveLayerImage("bgimage/s_ev" + "%03d".sprintf(i) + "a.bmp","bmp24");
+		}
+	} incontextof this;
+
+	// 存在するイベントCGのフラグ切り替え
+	this.chgE = function(flag = true) {
+		var num = 1;
+		var exists;
+		do {
+			var storage = "ev"+"%03d".sprintf(num);
+			exists = false;
+			for(var i=#'a'; Storages.isExistentStorage(storage + $i + ".bmp"); i++) {
+				exists = true;
+				sf[storage]=flag;
+				sf[storage + $i]=flag;
+			}
+			num++;
+		} while(exists);
+	} incontextof this;
+
+	// 回想シーン切り替え
+	this.chgS = function(number, flag = true) {
+		for(var i=0;i<number;i++)
+			sf["recollection"+(i+1)] = flag;
+	} incontextof this;
+
+	// 立ち絵ダミー作成
+	this.mkFg = function() {
+		var storages = ["st_aoi_a009a", "st_aoi_a009b", "st_aoi_a009e", "st_aoi_a009a", "st_aoi_a009c", "st_aoi_a009e", "st_aoi_a009a", "st_aoi_a009f", "st_aoi_a009b", "st_aoi_a009a", "st_aoi_a001a", "st_aoi_a001e", "st_aoi_a001a", "st_aoi_a002a", "st_aoi_a002e", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002c", "st_aoi_a002e", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a003c", "st_aoi_a003f", "st_aoi_a003d", "st_aoi_a003c", "st_aoi_a002a", "st_aoi_a002d", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004e", "st_aoi_a004d", "st_aoi_a004b", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004c", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002e", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002e", "st_aoi_a002a", "st_aoi_a002f", "st_aoi_a005f", "st_aoi_a005a", "st_aoi_a005b", "st_aoi_a005a", "st_aoi_a005e", "st_aoi_a005b", "st_aoi_a005a", "st_aoi_a005d", "st_aoi_a005c", "st_aoi_a005a", "st_aoi_a005c", "st_aoi_a005d", "st_aoi_a005b", "st_aoi_a005e", "st_aoi_a005a", "st_aoi_a005b", "st_aoi_a005e", "st_aoi_a005a", "st_aoi_a005b", "st_aoi_a005e", "st_aoi_a005b", "st_aoi_a005e", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004f", "st_aoi_a004e", "st_aoi_a004b", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a003c", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002e", "st_aoi_a002a", "st_aoi_a002c", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a006a", "st_aoi_a006c", "st_aoi_a006d", "st_aoi_a006e", "st_aoi_a006b", "st_aoi_a006a", "st_aoi_a006b", "st_aoi_a006b", "st_aoi_a006a", "st_aoi_a006b", "st_aoi_a006f", "st_aoi_a006b", "st_aoi_a006e", "st_aoi_a006e", "st_aoi_a006a", "st_aoi_a006b", "st_aoi_a007a", "st_aoi_a007b", "st_aoi_a007e", "st_aoi_a007b", "st_aoi_a007b", "st_aoi_a007a", "st_aoi_a007e", "st_aoi_a007a", "st_aoi_a007f", "st_aoi_a007a", "st_aoi_a007b", "st_aoi_a007e", "st_aoi_a007a", "st_aoi_a003c", "st_aoi_a003f", "st_aoi_a003d", "st_aoi_a003c", "st_aoi_a002a", "st_aoi_a002a", "st_aoi_a002c", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a001c", "st_aoi_a001b", "st_aoi_a001e", "st_aoi_a001c", "st_aoi_a001e", "st_aoi_a001c", "st_aoi_a001d", "st_aoi_a001b", "st_aoi_a001a", "st_aoi_a001c", "st_aoi_a001e", "st_aoi_a001a", "st_aoi_a001b", "st_aoi_a001a", "st_aoi_a001b", "st_aoi_a001a", "st_aoi_a001b", "st_aoi_a001e", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002c", "st_aoi_a002f", "st_aoi_a004a", "st_aoi_a004a", "st_aoi_a004e", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002f", "st_aoi_a002f", "st_aoi_a002a", "st_aoi_a003a", "st_aoi_a003c", "st_aoi_a003c", "st_aoi_a003c", "st_aoi_a003f", "st_aoi_a002d", "st_aoi_a002d", "st_aoi_a002d", "st_aoi_a002f", "st_aoi_a002f", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a002d", "st_aoi_a002b", "st_aoi_a002a", "st_aoi_a002b", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004a", "st_aoi_a004b", "st_aoi_a004b", "st_aoi_a005b", "st_aoi_a005e", "st_aoi_a005b", "st_aoi_a005a", "st_aoi_a005e", "st_aoi_a005e", "st_aoi_a005b", "st_aoi_a008b", "st_aoi_a008a", "st_aoi_a008c", "st_aoi_a008f", "st_aoi_a008b", "st_aoi_a008b", "st_aoi_a008a", "st_aoi_a008b", "st_aoi_a008b", "st_aoi_a008a", "st_aoi_a008b", "st_aoi_a008a", "st_aoi_a008e", "st_aoi_a008f", "st_aoi_a008e", "st_aoi_a008a"];
+//		var texts = ["フィーネ裸（通常）","フィーネ裸（怒り）","フィーネ裸（悲しみ）","フィーネ裸（笑顔）","フィーネ裸（羞恥）","フィーネ裸（驚き）","フィーネシャツ（通常）","フィーネシャツ（怒り）","フィーネシャツ（悲しみ）","フィーネシャツ（笑顔）","フィーネシャツ（羞恥）","フィーネシャツ（驚き）","フィーネ通常（通常）","フィーネ通常（怒り）","フィーネ通常（悲しみ）","フィーネ通常（笑顔）","フィーネ通常（羞恥）","フィーネ通常（驚き）","フィーネ浴衣（通常）","フィーネ浴衣（怒り）","フィーネ浴衣（悲しみ）","フィーネ浴衣（笑顔）","フィーネ浴衣（羞恥）","フィーネ浴衣（驚き）","フィーネメイド（通常）","フィーネメイド（怒り）","フィーネメイド（悲しみ）","フィーネメイド（笑顔）","フィーネメイド（羞恥）","フィーネメイド（驚き）","フィーネパジャマ（通常）","フィーネパジャマ（怒り）","フィーネパジャマ（悲しみ）","フィーネパジャマ（笑顔）","フィーネパジャマ（羞恥）","フィーネパジャマ（驚き）","クリス裸（通常）","クリス裸（怒り）","クリス裸（悲しみ）","クリス裸（笑顔）","クリス裸（羞恥）","クリス裸（驚き）","クリスシャツ（通常）","クリスシャツ（怒り）","クリスシャツ（悲しみ）","クリスシャツ（笑顔）","クリスシャツ（羞恥）","クリスシャツ（驚き）","クリス通常（通常）","クリス通常（怒り）","クリス通常（悲しみ）","クリス通常（笑顔）","クリス通常（羞恥）","クリス通常（驚き）","クリススク水（通常）","クリススク水（怒り）","クリススク水（悲しみ）","クリススク水（笑顔）","クリススク水（羞恥）","クリススク水（驚き）","クリスメイド（通常）","クリスメイド（怒り）","クリスメイド（悲しみ）","クリスメイド（笑顔）","クリスメイド（羞恥）","クリスメイド（驚き）","クリスネグリジェ（通常）","クリスネグリジェ（怒り）","クリスネグリジェ（悲しみ）","クリスネグリジェ（笑顔）","クリスネグリジェ（羞恥）","クリスネグリジェ（驚き）"];
+		var layer = new Layer(kag, kag.fore.base);
+		for(var i=0; i<storages.count; i++) {
+//			if(storages.count != texts.count) break;
+			layer.face=dfBoth;
+			layer.setSize(200, 400);
+			layer.fillRect(0, 0, 200, 400, 0x99ffffff);
+			layer.font.height=20;
+			layer.drawText(10, 150, storages[i] , 0x000000, 255, true);
+//			layer.drawText(10, 200, texts[i], 0x000000, 255, true);
+			layer.visible=true;
+			layer.saveLayerImage("fgimage/" + storages[i] + ".bmp", "bmp32");
+		}
+	} incontextof this;
+}

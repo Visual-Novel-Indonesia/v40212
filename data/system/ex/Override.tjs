@@ -1,0 +1,5 @@
+KAGLoadScript("KAGWindowEx.tjs");
+KAGLoadScript("CharacterLayerEx.tjs");
+KAGLoadScript("LinkButtonLayerEx.tjs");
+KAGLoadScript("MessageLayerEx.tjs");
+KAGLoadScript("SliderLayer.tjs");

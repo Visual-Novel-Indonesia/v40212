@@ -1,0 +1,511 @@
+// SliderLayer.tjs - スライダーレイヤ
+// Copyright (C)2001-2002, W.Dee  改変・配布は自由です
+
+class SliderLayer extends Layer
+{
+	var Slider_min = 0; // 最小値
+	var Slider_max = 0; // 最大値
+	var Slider_position = 0; // 位置
+	var Slider_tabWidth = 10; // つまみサイズ
+	var Slider_dragging = false; // ドラッグ中かどうか
+	var Slider_dragOriginX; // ドラッグ開始 X 位置
+	var Slider_mouseOn = false; // マウスが領域内にあるかどうか
+
+	var Slider_target; // 対象
+	var Slider_addRate = 10; // 分割数
+	var Slider_infoLayer; // 情報表示レイヤ
+	var Slider_rate = 100 / 255; // 比率
+	var Slider_unit = "％"; // 単位
+	var Slider_button = []; // ボタン
+	var Slider_tab; // タブ
+
+	function SliderLayer(win, par)
+	{
+		super.Layer(win, par);
+
+		focusable = true; // フォーカスを得られる
+
+		hitType = htMask;
+		hitThreshold = 0;
+
+		Slider_tab = new global.Layer(win, par);
+/*
+		Slider_infoLayer = new global.Layer(win, par);
+
+		// メッセージ不透明度
+		Slider_button.l = new LinkButtonLayerEx(win, par);
+		Slider_button.r = new LinkButtonLayerEx(win, par);
+		// オプション追加
+		with(Slider_button.l)
+		{
+			.text = "<";
+			.loadImages("button_sample");
+			.onExecute = function { setPosition(false, false); } incontextof this;
+		}
+		with(Slider_button.r)
+		{
+			.text = ">";
+			.loadImages("button_sample");
+			.onExecute = function { setPosition(false, true); } incontextof this;
+		}
+*/
+	}
+
+	function finalize()
+	{
+/*
+		invalidate Slider_infoLayer if Slider_infoLayer !== void;
+		invalidate Slider_button.l if Slider_button.l !== void;
+		invalidate Slider_button.r if Slider_button.r !== void;
+*/
+		invalidate Slider_tab if Slider_tab !== void;
+
+		super.finalize(...);
+	}
+
+	function assign(src)
+	{
+		// src の情報をこのオブジェクトにコピー
+		Slider_min = src.Slider_min;
+		Slider_max = src.Slider_max;
+		Slider_position = src.Slider_position;
+
+		Slider_target = src.Slider_target;
+		Slider_addRate = src.Slider_addRate;
+//		Slider_infoLayer.copyRect(0, 0, src.Slider_infoLayer, 0, 0, src.Slider_infoLayer.width, src.Slider_infoLayer.height);
+		Slider_rate = src.Slider_rate;
+		Slider_unit = src.Slider_unit;
+/*
+		Slider_button.l.assign(src.Slider_button.l);
+		Slider_button.r.assign(src.Slider_button.r);
+*/
+		Slider_tab.assignImages(src.Slider_tab);
+	}
+	
+	function loadTabImages(image, colorkey=clNone) {
+		Slider_tab.loadImages(image);
+		Slider_tab.visible = true;
+		Slider_tab.top = top + (this.height - this.Slider_tab.height) \ 2 + 1;
+//		Slider_tab.cursor = window.cursorPointed;
+//		Slider_tab.onMouseDown = this.onMouseDown;
+		Slider_tab.hitThreshold = 256;
+		Slider_tabWidth = this.Slider_tab.width;
+	}
+
+	function onPaint()
+	{
+		// onPaint イベント
+		// レイヤの内容を描画する
+		super.onPaint(...);
+
+		// よく使う値をローカル変数に用意する
+		var imw = imageWidth, imh = imageHeight;
+		//var tabw = Slider_tabWidth;
+		var tabw = Slider_tab.width;
+		var htabw = tabw >> 1;
+
+/*
+		// 下敷きを塗る
+		fillRect(0, 0, imw, imh, 0);
+
+		if(focused)
+		{
+			// フォーカスがあるのでハイライトする
+			colorRect(0, 0, width-1, 1, clHighlight, 128);
+			colorRect(0, 1, 1, height-2, clHighlight, 128);
+			colorRect(0, height-1, width, 1, clHighlight, 128);
+			colorRect(width-1, 0, 1, height-1, clHighlight, 128);
+		}
+
+		// 中央のへこみ線
+		{
+			var himh = imh >> 1;
+			var right = imw - tabw;
+			fillRect(htabw, himh - 1, right, 1, 0x80000000);
+			fillRect(htabw, himh    , right, 1, 0x80ffffff);
+		}
+*/
+		// タブ
+		var pos_x = int((Slider_position-Slider_min) * (imw - tabw)/(Slider_max - Slider_min));
+		Slider_tab.left = pos_x + left;
+/*
+		var pos_x = int(
+			(Slider_position-Slider_min) * (imw - tabw - 2)/(Slider_max - Slider_min)) +
+			htabw + 1;
+		var x_htabw = pos_x - htabw;
+		fillRect(x_htabw, 0, tabw, imh, 0xffffff + (nodeEnabled ? 0 : 0xc0000000));
+		if(Slider_mouseOn)
+		{
+			colorRect(x_htabw, 0, tabw, imh, clHighlight, 64);
+		}
+		colorRect(x_htabw + 1, 0, tabw-2, 1, 0xffffff, 128);
+		colorRect(x_htabw + 1, imh - 1, tabw-2, 1, 0x000000, 128);
+		colorRect(x_htabw, 0, 1, height, 0xffffff, 128);
+		colorRect(pos_x + htabw - 1, 0, 1, height, 0x000000, 128);
+*/
+		
+/*
+		if(enabled)
+		{
+			with(Slider_infoLayer)
+			{
+				.fillRect(0, 0, .width, .height, 0);
+				.drawText(0, 0, (int) (Slider_position * Slider_rate) + Slider_unit, 0xffffff);
+			}
+		}
+*/
+	}
+
+	function onKeyDown(key, shift, process)
+	{
+		// キーが押された
+		if(process)
+		{
+			if(key == VK_LEFT)
+			{
+				// 左
+				setPosition(shift & ssAlt, false);
+				super.onKeyDown(key, shift, false); // 処理をしたのでprocessにfalseを渡す
+			}
+			else if(key == VK_RIGHT)
+			{
+				// 右
+				setPosition(shift & ssAlt, true);
+				super.onKeyDown(key, shift, false); // 処理をしたのでprocessにfalseを渡す
+			}
+			else
+			{
+				super.onKeyDown(...);
+			}
+		}
+		else
+		{
+			// process が false の場合は処理は行わない
+			super.onKeyDown(...);
+		}
+	}
+
+	function setPosition(isAltDown, isPositive)
+	{
+		focus(true);
+		var addPos;
+		if(isAltDown)
+		{
+			addPos = 1 / Slider_rate;
+		}
+		else
+		{
+			addPos = Slider_addRate / Slider_rate;
+		}
+
+		if(!isPositive) { addPos = -addPos; }
+		position = Slider_position + addPos;
+	}
+
+	function onMouseDown(x, y, button)
+	{
+		if(button == mbLeft)
+		{
+			if(enabled && !parent.selProcessLock && window.inStable)
+			{
+				// マウスボタンが押された
+				focus();
+
+				super.onMouseDown(...);
+
+				var tabw = Slider_tabWidth;
+				var htabw = tabw >> 1;
+				var pos_x = int(
+					(Slider_position-Slider_min) * (imageWidth - tabw - 2)/(Slider_max - Slider_min)) +
+					htabw + 1;
+				if(pos_x - htabw > x)
+				{
+					// タブより左
+					position = Slider_position - (Slider_addRate / Slider_rate);
+				}
+				else if(pos_x + htabw < x)
+				{
+					// タブより右
+					position = Slider_position + (Slider_addRate / Slider_rate);
+				}
+				else
+				{
+					// タブ
+					// タブのドラッグを開始
+					Slider_dragging = true;
+					Slider_dragOriginX = x - pos_x;
+				}
+			}
+			else
+			{
+				window.onPrimaryClick();
+			}
+		}
+		else
+		{
+			parent.onMouseDown(...);
+		}
+	}
+
+	function onMouseUp(x, y, button)
+	{
+		// マウスボタンが離された
+		super.onMouseUp(...);
+
+		Slider_dragging = false;
+	}
+
+	function onMouseMove(x, y)
+	{
+		// マウスが移動した
+		super.onMouseMove(...);
+
+		var tabw = Slider_tabWidth;
+		var htabw = tabw >> 1;
+		var pos_x = int(
+			(Slider_position-Slider_min) * (imageWidth - tabw - 2)/(Slider_max - Slider_min)) +
+			htabw + 1;
+		if(pos_x - htabw <= x && pos_x + htabw >= x || Slider_dragging) {
+			this.cursor = window.cursorPointed;
+		} else {
+			this.cursor = window.cursorDefault;
+		}
+
+		if(Slider_dragging)
+		{
+			// タブをドラッグ
+			position = int(
+				(x - Slider_dragOriginX - (Slider_tabWidth >> 1)) * (Slider_max - Slider_min) /
+				(imageWidth - Slider_tabWidth - 2) + Slider_min);
+		}
+	}
+
+	function onMouseEnter()
+	{
+		// マウスがレイヤ領域内に入った
+		update();
+		Slider_mouseOn = true;
+		super.onMouseEnter(...);
+	}
+
+	function onMouseLeave()
+	{
+		// マウスがレイヤ領域から出ていった
+		update();
+		Slider_mouseOn = false;
+		Slider_dragging = false;
+		super.onMouseLeave(...);
+	}
+
+	function onFocus()
+	{
+		// フォーカスを得た
+		super.onFocus(...);
+		update();
+	}
+
+	function onBlur()
+	{
+		// フォーカスを失った
+		super.onBlur(...);
+		update();
+	}
+
+	function onNodeDisabled()
+	{
+		// レイヤのノードが不可になった
+		super.onNodeDisabled(...);
+		update();
+	}
+
+	function onNodeEnabled()
+	{
+		// レイヤのノードが有効になった
+		super.onNodeEnabled(...);
+		update();
+	}
+
+	function setPos(x, y)
+	{
+		left = x;
+		top = y;
+	}
+
+
+	property width
+	{
+		setter(x)
+		{
+			super.width = x;
+			imageWidth = x;
+			update();
+		}
+		getter
+		{
+			return super.width;
+		}
+	}
+	
+	property height
+	{
+		setter(x)
+		{
+			super.height = x;
+			imageHeight = x;
+			update();
+		}
+		getter
+		{
+			return super.height;
+		}
+	}
+	
+	property max
+	{
+		setter(x)
+		{
+			Slider_max = +x;
+			update();
+		}
+		getter
+		{
+			return Slider_max;
+		}
+	}
+	
+	property min
+	{
+		setter(x)
+		{
+			Slider_min = +x;
+			update();
+		}
+		getter
+		{
+			return Slider_min;
+		}
+	}
+	
+	property position
+	{
+		setter(x)
+		{
+			if(x < Slider_min) x = Slider_min;
+			if(x > Slider_max) x = Slider_max;
+			Slider_position = +x;
+			update();
+			if(Slider_target != void) {
+				Scripts.eval("(" + Slider_target + " = " + x + ")");
+			}
+		}
+		getter
+		{
+			return Slider_position;
+		}
+	}
+	
+	property target
+	{
+		setter(x)
+		{
+			Slider_target = x;
+		}
+		getter
+		{
+			return Slider_target;
+		}
+	}
+	
+	property left
+	{
+		setter(x)
+		{
+			super.left = x;
+			/*
+			Slider_infoLayer.left = x + width + Slider_button.r.width + 10;
+			Slider_button.l.left = x - Slider_button.l.width - 5;
+			Slider_button.r.left = x + width + 5;
+			*/
+		}
+		getter
+		{
+			return super.left;
+		}
+	}
+	
+	property top
+	{
+		setter(x)
+		{
+			super.top = x;
+			/*
+			Slider_infoLayer.top = x;
+			var buttonTop = super.top + (super.height \ 2 - Slider_button.l.height \ 2);
+			Slider_button.l.top = buttonTop;
+			Slider_button.r.top = buttonTop;
+			*/
+		}
+		getter
+		{
+			return super.top;
+		}
+	}
+	
+	property visible
+	{
+		setter(x)
+		{
+			super.visible = x;
+			/*
+			Slider_infoLayer.visible = x;
+			Slider_button.l.visible = x;
+			Slider_button.r.visible = x;
+			*/
+		}
+		getter
+		{
+			return super.visible;
+		}
+	}
+	
+	property enabled
+	{
+		setter(x)
+		{
+			super.enabled = x;
+			/*
+			Slider_infoLayer.enabled = x;
+			Slider_button.l.enabled = x;
+			Slider_button.r.enabled = x;
+			*/
+		}
+		getter
+		{
+			return super.enabled;
+		}
+	}
+	
+	property rate
+	{
+		setter(x)
+		{
+			Slider_rate = x;
+		}
+		getter
+		{
+			return Slider_rate;
+		}
+	}
+	
+	property unit
+	{
+		setter(x)
+		{
+			Slider_unit = x;
+		}
+		getter
+		{
+			return Slider_unit;
+		}
+	}
+}

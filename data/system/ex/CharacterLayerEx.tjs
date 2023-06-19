@@ -1,0 +1,117 @@
+class CharacterLayerEx extends CharacterLayer
+{
+	var depthRate = 1; // 画像表示の割合
+	var tempLayer = void; // 一時レイヤ
+
+	/* コンストラクタオーバーライド */
+	function CharacterLayerEx(win, par, name, id)
+	{
+		super.CharacterLayer(...);
+	}
+
+	/* finalizeオーバーライド */
+	function finalize()
+	{
+		// tempLayerを無効化
+		invalidate tempLayer if tempLayer !== void;
+		super.finalize(...);
+	}
+
+	/* loadImagesオーバーライド */
+	function loadImages(elm)
+	{
+		if(elm !== void && elm.rate !== void)
+		{
+			// 背景画像パラメータのインデックス
+			var bgNum = 0;
+			if(window.fore.base.Anim_loadParams)
+			{
+				// 現在baseレイヤに読み込まれている画像
+				var bgStorage = window.fore.base.Anim_loadParams.storage;
+				if(bgStorage.length == 6)
+				{
+					var n = +bgStorage.substring(2, bgStorage.length - 1);
+					bgNum = n if bgParam[n];
+				}
+			}
+			elm.storage = Anim_loadParams.storage if elm.storage === void;
+			// 読み込み情報をコピー
+			var tmpElm = %[];
+			(Dictionary.assign incontextof tmpElm)(elm);
+			// 表示可否のみ偽に設定し、読み込む画像を一時レイヤに読み込む
+			tmpElm.visible = false;
+			if(tempLayer === void)
+				tempLayer = new global.CharacterLayer(window, window.primaryLayer, "一時レイヤ", 999);
+			tempLayer.loadImages(tmpElm);
+
+			// 表示割合の設定
+			depthRate = +elm.rate;
+			// 対象レイヤーの位置、サイズを算出
+			var vp = bgParam[bgNum].vp;
+			assignSuper(tempLayer);
+			absolute = absolute;
+			if(elm.top === void) {
+				top = int(vp - depthRate * (vp - bgParam[bgNum].ground + tempLayer.height));
+				top \= 3 if top < 0; // 上方向にはみ出た場合は補正
+			}
+			width = int(tempLayer.width * depthRate);
+			height = int(tempLayer.height * depthRate);
+
+			// 属性値の調整(TODO 必要なら追加する)
+			visible = elm.visible !== void;
+			if(elm.left === void)
+				left += (tempLayer.width - width) \ 2 if depthRate != 1;
+
+			// 表示順の調整
+			var layers = elm.page == "back" ? window.back.layers : window.fore.layers;
+			var sortDics = new Array();
+			for(var i = 0; i < layers.count; i++) {
+				// レイヤー番号と表示割合で連想配列を生成
+				sortDics.add(%[idx:i, rate:layers[i].depthRate]);
+			}
+			// 表示割合の昇順、レイヤー番号の降順でソート
+			sortDics.sort(function(a, b){ return a.rate != b.rate ? a.rate < b.rate : a.idx > b.idx; });
+			var index = 1000;
+			for(var i = 0; i < sortDics.count; i++) {
+				// ソート結果順に絶対位置を設定
+				layers[sortDics[i].idx].absolute = index;
+				index += 1000;
+			}
+
+			// 一時レイヤから対象レイヤに貼り付け
+			stretchCopy(0, 0, width, height, tempLayer, 0, 0, tempLayer.width, tempLayer.height, stFastLinear);
+		} else
+		{
+			// パラメータが渡って来ない場合
+			super.loadImages(...);
+		}
+	}
+
+	/* コピー用(なんかいい方法はないもんか…) */
+	function assignSuper(src)
+	{
+		super.assign(...);
+	}
+
+	/* assign オーバーライド */
+	function assign(src)
+	{
+		super.assign(...);
+		depthRate = src.depthRate;
+	}
+
+	/* store オーバーライド */
+	function store()
+	{
+		var dic = super.store();
+		dic.depthRate = depthRate;
+		return dic;
+	}
+
+	/* restore オーバーライド */
+	function restore(dic)
+	{
+		depthRate = +dic.depthRate if dic.depthRate !== void;
+		super.restore(...);
+	}
+}

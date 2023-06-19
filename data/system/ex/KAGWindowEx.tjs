@@ -1,0 +1,261 @@
+class KAGWindowEx extends KAGWindow
+{
+	var isMessageDisplay = false; // 通常のメッセージを表示中かどうか(右クリック動作の判別に使用)
+
+	/* オーバーライド */
+	function KAGWindowEx(ismain = true, width = 0, height = 0)
+	{
+		super.KAGWindow(...);
+	}
+
+	/* 前景レイヤのオブジェクトを変更 */
+	function allocateCharacterLayers(num)
+	{
+		// 前景レイヤ数を num に設定する
+		if(fore.layers.count > num)
+		{
+			// レイヤが減る
+			for(var i = num; i<fore.layers.count; i++)
+			{
+				invalidate fore.layers[i];
+				invalidate back.layers[i];
+			}
+			fore.layers.count = num;
+			back.layers.count = num;
+		}
+		else if(fore.layers.count < num)
+		{
+			// レイヤが増える
+			for(var i = fore.layers.count; i<num; i++)
+			{
+//				fore.layers[i] = new CharacterLayer(this, fore.base, "表前景レイヤ" + i, i);
+//				back.layers[i] = new CharacterLayer(this, back.base, "裏前景レイヤ" + i, i);
+				fore.layers[i] = new CharacterLayerEx(this, fore.base, "表前景レイヤ" + i, i);
+				back.layers[i] = new CharacterLayerEx(this, back.base, "裏前景レイヤ" + i, i);
+				fore.layers[i].setCompLayer(back.layers[i]);
+				back.layers[i].setCompLayer(fore.layers[i]);
+			}
+			reorderLayers();
+		}
+		numCharacterLayers = num;
+	}
+
+	/* メッセージレイヤのオブジェクトを変更 */
+	function allocateMessageLayers(num, setdefaultfont = true)
+	{
+		// メッセージレイヤ数を num に設定する
+		if(fore.messages.count > num)
+		{
+			// レイヤが減る
+			for(var i = num; i<fore.messages.count; i++)
+			{
+				if(current == fore.messages[i] || current == back.messages[i])
+					current = fore.messages[0], currentNum = 0, currentPage = 0;
+				invalidate fore.messages[i];
+				invalidate back.messages[i];
+			}
+			fore.messages.count = num;
+			back.messages.count = num;
+		}
+		else if(fore.messages.count < num)
+		{
+			// レイヤが増える
+			for(var i = fore.messages.count; i<num; i++)
+			{
+//				fore.messages[i] = new MessageLayer(this, fore.base, "表メッセージレイヤ" + i, i, true);
+//				back.messages[i] = new MessageLayer(this, back.base, "裏メッセージレイヤ" + i, i, true);
+				fore.messages[i] = new MessageLayerEx(this, fore.base, "表メッセージレイヤ" + i, i, true);
+				back.messages[i] = new MessageLayerEx(this, back.base, "裏メッセージレイヤ" + i, i, true);
+				fore.messages[i].setCompLayer(back.messages[i]);
+				back.messages[i].setCompLayer(fore.messages[i]);
+				fore.messages[i].clear();
+				back.messages[i].clear();
+			}
+			reorderLayers();
+			if(setdefaultfont) setMessageLayerUserFont();
+		}
+		numMessageLayers = num;
+	}
+
+	/* メッセージ表示中でも右クリックで隠す */
+	function onPrimaryRightClick()
+	{
+		// プライマリレイヤで右クリックされたときに呼ばれる
+		if(!callHook(rightClickHook))
+		{
+			if(getKeyState(VK_LBUTTON))
+			{
+				enterAutoMode();
+				return;
+			}
+			if(!rightClickEnabled) return;
+//			if(inStable)
+			if(inStable || isMessageDisplay)
+			{
+				if(rightClickJump)
+					jumpToRightClickTarget();
+				else if(rightClickCall && conductor == mainConductor)
+					callRightClickSubRoutine();
+				else
+					switchMessageLayerHiddenByUser();
+			}
+			setMenuAccessibleAll();
+		}
+	}
+
+	/* Ctrlキーでスキップ(クリック連打) */
+	function processKeys(key, shift)
+	{
+		super.processKeys(...);
+
+		if(key == VK_CONTROL)
+		{
+			// クリックをエミュレート
+			onPrimaryClick();
+			return;
+		}
+	}
+
+	/* 保存時のメッセージを変更 */
+	function saveBookMarkWithAsk(num)
+	{
+		// 栞番号 num に栞を設定する
+		// そのとき、設定するかどうかをたずねる
+		if(readOnlyMode) return false;
+		if(bookMarkProtectedStates[num]) return false;
+/*
+		var prompt = "栞 ";
+		if(num < numBookMarks) prompt += (num + 1);
+		if(bookMarkDates[num] != "") // bookMarkDates が空文字の場合は栞は存在しない
+			prompt += "「" + bookMarkNames[num] + "」";
+		prompt += "に「"+ pcflags.currentPageName + "」をはさみますか?";
+*/
+		var prompt = "";
+		if(num < numBookMarks) prompt += "No.%02d".sprintf(num + 1);
+		prompt += "に現在の状態を" + (bookMarkDates[num] != "" ? "上書き" : "") + "セーブしますか?";
+		var result = askYesNo(prompt);
+		if(result) return saveBookMark(num);
+		return false;
+	}
+
+	/* 読込時のメッセージを変更 */
+	function loadBookMarkWithAsk(num)
+	{
+		// 栞番号 num から栞を読み出す
+		// そのとき、読み出すかどうかをたずねる
+		if(num < numBookMarks && bookMarkDates[num] == "") // bookMarkDates が空文字の場合は栞は存在しない
+			return false;
+/*
+		var prompt = "栞 ";
+		if(num < numBookMarks) prompt += (num + 1);
+		prompt += "「"+ bookMarkNames[num] + "」をたどりますか?";
+*/
+		var prompt = "";
+		if(num < numBookMarks) prompt += "No.%02d".sprintf(num + 1);
+		prompt += "のデータをロードしますか?";
+		var result = askYesNo(prompt);
+		if(result) return loadBookMark(num);
+		return false;
+	}
+
+	/* ロード時にカットインレイヤーの表示可否を決定 */
+	function internalRestoreFlags(f, clear, elm)
+	{
+		super.internalRestoreFlags(f, clear, elm);
+		if(sf.cutin && flags.viewcutin)
+		{
+			tagHandlers.image(%[layer:flags.viewcutin.layer, storage:flags.viewcutin.storage, left:flags.viewcutin.left, top:flags.viewcutin.top, visible:true]);
+			tagHandlers.backlay(%[layer:flags.viewcutin.layer]);
+		}
+		else if(!sf.cutin && flags.viewcutin)
+		{
+			fore.layers[flags.viewcutin.layer].visible = false;
+			tagHandlers.backlay(%[layer:flags.viewcutin.layer]);
+		}
+		if(sflags.msg_opacity !== void) {
+			fore.messages[0].opacity = sflags.msg_opacity;
+			tagHandlers.backlay(%[layer:'message0']);
+		}
+	}
+
+
+	/* オートモード解除時にオート画像を非表示 */
+	function cancelAutoMode()
+	{
+		super.cancelAutoMode();
+		messageButtonReload();
+	}
+
+	/* スキップ解除時にスキップ画像を非表示 */
+	function cancelSkip()
+	{
+		super.cancelSkip();
+		messageButtonReload();
+	}
+	
+	function messageButtonReload() {
+		with(kag.fore.messages[0])
+		{
+			// ボタンのフラグチェック
+			for(var i = 0; i < .links.length; i++)
+			{
+				var button = .links[i].object;
+				if(.links[i].type == .ltButton && !button.flag)
+				{
+					// フラグが降りている場合は再描画
+					button.flag = false;
+					button.draw();
+				}
+			}
+		}
+	}
+
+	/* 未読スキップを追加 */
+	function onConductorLabel(label, page)
+	{
+		// コンダクタがラベルを通過した
+		if(!usingExtraConductor)
+		{
+			incRecordLabel(true);
+			setRecordLabel(conductor.curStorage, label);
+		}
+		setUserSpeed();
+		if(!usingExtraConductor)
+		{
+			if(!getCurrentRead() && skipMode != 4 && !sf.skip_read)
+				cancelSkip(); // 未読なのでスキップを停止
+			currentLabel = label;
+		}
+		if(page !== void && page !== '')
+		{
+			if(page[0] == '&') page = Scripts.eval((page.substring(1)));
+			currentPageName = page;
+		}
+		if(page !== void)
+		{
+			pushHistoryOfStore();
+			stablePosibility = false;
+			dm(conductor.curStorage + " : ラベル/ページ : " + label + "/" + currentPageName);
+			if(usingExtraConductor) throw new Exception("右クリックサブルーチン内/extraCondutor"
+				"サブルーチン内では保存可能なラベルを記述できません");
+			storeFlags(), storeLabelPassed = true, setMenuAccessibleAll();
+			if(recordHistoryOfStore == 1) // 1 : 保存可能なラベルごと
+				setToRecordHistory();
+		}
+		return true;
+	}
+
+	/* 追加 */
+	function getHandlers()
+	{
+		var handlers = super.getHandlers();
+		handlers.slider = function(elm)
+		{
+			// スライダー
+			if(currentWithBack) current.comp.addSlider(elm);
+			current.addSlider(elm);
+			return 0;
+		} incontextof this;
+		return handlers;
+	}
+}

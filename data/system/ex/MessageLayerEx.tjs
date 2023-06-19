@@ -1,0 +1,368 @@
+class MessageLayerEx extends MessageLayer
+{
+	var infoLayer = void; // オート、スキップ画像用
+
+	// リンクタイプ(追加)
+	var ltSlider = 5;
+
+	/* コンストラクタオーバーライド */
+	function MessageLayerEx(owner, parent, name, id, do_config)
+	{
+		super.MessageLayer(...);
+	}
+
+	/* finalizeオーバーライド */
+	function finalize()
+	{
+		super.finalize(...);
+	}
+
+	/* オーバーライド */
+	function addButton(elm)
+	{
+		// グラフィカルボタンを配置
+//		var object = new LinkButtonLayer(window, this);
+		var object = new LinkButtonLayerEx(window, this);
+		// オプション追加
+		object.showMouseDownImage = false if(elm.invalidDown);
+		object.showMouseOnImage = false if(elm.invalidOn);
+		object.showFlagImage = true if(elm.flag !== void);
+		object.flag = elm.flag;
+		object.text = elm.text;
+		object.textColor = elm.textColor === void ? 0xffffff : elm.textColor;
+
+		object.loadImages(elm.graphic, elm.graphickey);
+		object.linkNum = numLinks;
+//		object.setPos(x, y);
+		// locate指定しなくても座標設定できるよう変更
+		var left, top;
+		if(elm.x === void && elm.y === void) {
+			left = x;
+			top = y;
+		} else {
+			if(elm.x == "c")
+				left = (this.width - object.width) \ 2;
+			else
+				left = +elm.x;
+			if(elm.y == "c")
+				top = (this.height - object.height) \ 2;
+			else
+				top = +elm.y;
+		}
+		object.setPos(left, top);
+
+		object.hint = elm.hint;
+		object.visible = true;
+		object.onenter = createSoundExpression(elm.onenter, elm.enterse, elm.entersebuf);
+		object.onleave = createSoundExpression(elm.onleave, elm.leavese, elm.leavesebuf);
+		object.hitThreshold =
+			(elm.recthit === void || +elm.recthit) ? 0 : 64;
+
+		links[numLinks] = %[
+			type :			ltButton,
+			graphic :		elm.graphic,
+			graphickey :	elm.graphickey,
+			storage :		elm.storage,
+			target :		elm.target,
+			exp :			createSoundExpression(elm.exp, elm.clickse, elm.clicksebuf),
+			countPage :		(elm.countpage === void) ? true : +elm.countpage,
+			object :		object,
+			onenter :		object.onenter,
+			onleave :		object.onleave,
+//			x :				[x],
+//			y :				[y],
+			x :				[left],
+			y :				[top],
+
+			w :				[object.width],
+			h :				[object.height],
+			fixed :			[true],
+			lineCount :		1
+			];
+
+		numLinks++;
+		focusable = true; // フォーカスを受け取れるように
+		setSelProcessLock(false); // 選択ロック解除
+	}
+
+	/* スライダー(追加) */
+	function addSlider(elm)
+	{
+		// スライダーを配置
+		var object = new SliderLayer(window, this);
+//		object.loadImages(elm.graphic, elm.graphickey);
+		object.linkNum = numLinks;
+		object.hint = elm.hint;
+
+		var left, top;
+		if(elm.x === void && elm.y === void) {
+			left = x;
+			top = y;
+		} else {
+			left = +elm.x;
+			top = +elm.y;
+		}
+		object.width = elm.width;
+		object.height = elm.height;
+		object.setPos(left, top);
+		object.visible = true;
+		object.min = elm.min;
+		object.max = elm.max;
+		object.position = elm.position;
+		object.cursor = crArrow;
+		object.target = elm.target;
+		object.loadTabImages(elm.graphic, elm.graphickey);
+
+		links[numLinks] = %[
+			type :			ltSlider,
+			graphic :		elm.graphic,
+			storage :		elm.storage,
+			exp :			createSoundExpression(elm.exp, elm.clickse, elm.clicksebuf),
+			countPage :		(elm.countpage === void) ? true : +elm.countpage,
+			object :		object,
+			x :				[x],
+			y :				[y],
+			w :				[object.width],
+			h :				[object.height],
+			fixed :			[true],
+			lineCount :		1
+			];
+
+		numLinks++;
+		focusable = true; // フォーカスを受け取れるように
+		setSelProcessLock(false); // 選択ロック解除
+	}
+
+	/* オーバーライド */
+	function internalAssign(src, copyvisiblestate)
+	{
+		// レイヤの情報をコピー
+		// ( コピーする情報が膨大なのでちょっと実行時間がかかる )
+
+		// このレイヤ自身の画像、位置、透明度などのコピー
+		assignImages(src);
+		if(copyvisiblestate)
+			assignVisibleState(src); // assignImages は可視・不可視などの情報はコピーしないため
+
+		focusable = src.focusable;
+
+		// links のコピー
+		{
+			invalidateLinkObjects(); // 一応オブジェクトはすべて無効化
+			var tl = links, sl = src.links;
+			tl.count = sl.count;
+			for(var i = sl.count-1; i>=0; i--)
+			{
+				if(sl[i] === void) continue;
+				var tl_d = (tl[i] = %[]);
+				var sl_d = sl[i];
+				(Dictionary.assign incontextof tl_d)(sl_d);
+				// ただし、x, y, w, h, fixed の各メンバは実際に内容を assign
+				// しないと駄目
+				(tl_d.x = []).assign(sl_d.x);
+				(tl_d.y = []).assign(sl_d.y);
+				(tl_d.w = []).assign(sl_d.w);
+				(tl_d.h = []).assign(sl_d.h);
+				(tl_d.fixed = []).assign(sl_d.fixed);
+
+				// タイプに従って
+				var type = tl_d.type;
+				if(type == ltButton)
+				{
+					// ボタン
+					var sl_d_object = sl_d.object;
+//					var object = new LinkButtonLayer(window, this);
+					var object = new LinkButtonLayerEx(window, this);
+						// object は再作成
+					object.assign(sl_d_object);
+					tl_d.object = object;
+				}
+				else if(type == ltEdit)
+				{
+					// 単一行エディット
+					var sl_d_object = sl_d.object;
+					var object = new LinkEditLayer(window, this);
+						// object は再作成
+					object.assign(sl_d_object);
+					tl_d.object = object;
+				}
+				else if(type == ltCheckBox)
+				{
+					// チェックボックス
+					var sl_d_object = sl_d.object;
+					var object = new LinkCheckBoxLayer(window, this);
+						// object は再作成
+					object.assign(sl_d_object);
+					tl_d.object = object;
+				}
+				/* 追加 */
+				else if(type == ltSlider)
+				{
+					// スライダー
+					var sl_d_object = sl_d.object;
+					var object = new SliderLayer(window, this);
+						// object は再作成
+					object.assign(sl_d_object);
+					tl_d.object = object;
+				}
+			}
+		}
+
+
+		// lineLayerLinks のコピー
+		{
+			var tl = lineLayerLinks, sl = src.lineLayerLinks;
+			tl.count = sl.count;
+			for(var i = sl.count-1; i>=0; i--)
+			{
+				(Dictionary.assign incontextof (tl[i] = %[]))(sl[i]);
+			}
+		}
+
+		// lineLayer の位置、サイズ、画像、フォント情報をコピー
+		{
+			var tl = lineLayer, sl = src.lineLayer;
+			tl.assignImages(sl);
+			tl.assignVisibleState(sl);
+			var tf = tl.font, sf = sl.font;
+			tf.face = sf.face;
+			tf.angle = sf.angle;
+			tf.bold = sf.bold;
+			tf.italic = sf.italic;
+			tf.height = sf.height;
+		}
+
+		// そのほか
+		highlightLayer.visible = false;
+		keyLink = -1;
+		imageModified = true;
+
+		// その他の情報のコピー
+		// [start_assign_vars] と [end_assign_vars] の間は
+		// perl によって自動生成されるので、このマークを消したり、
+		// 二つのマークの間を編集したりしないこと。
+		// [start_assign_vars]
+		frameGraphic = src.frameGraphic;
+		frameKey = src.frameKey;
+		frameColor = src.frameColor;
+		frameOpacity = src.frameOpacity;
+		marginL = src.marginL;
+		marginT = src.marginT;
+		marginR = src.marginR;
+		marginB = src.marginB;
+		marginRCh = src.marginRCh;
+		x = src.x;
+		y = src.y;
+		relinexpos = src.relinexpos;
+		isLastLine = src.isLastLine;
+		indentxpos = src.indentxpos;
+		linkFilled = src.linkFilled;
+		numLinks = src.numLinks;
+		selProcessLock = src.selProcessLock;
+		storedSelProcessLock = src.storedSelProcessLock;
+		defaultLinkColor = src.defaultLinkColor;
+		defaultLinkOpacity = src.defaultLinkOpacity;
+		defaultFontSize = src.defaultFontSize;
+		fontSize = src.fontSize;
+		_fontSize = src._fontSize;
+		defaultLineSize = src.defaultLineSize;
+		reserveLineSize = src.reserveLineSize;
+		lineSize = src.lineSize;
+		defaultRubySize = src.defaultRubySize;
+		rubySize = src.rubySize;
+		_rubySize = src._rubySize;
+		defaultRubyOffset = src.defaultRubyOffset;
+		rubyOffset = src.rubyOffset;
+		_rubyOffset = src._rubyOffset;
+		defaultLineSpacing = src.defaultLineSpacing;
+		lineSpacing = src.lineSpacing;
+		defaultPitch = src.defaultPitch;
+		pitch = src.pitch;
+		defaultShadow = src.defaultShadow;
+		shadow = src.shadow;
+		defaultEdge = src.defaultEdge;
+		edge = src.edge;
+		defaultShadowColor = src.defaultShadowColor;
+		shadowColor = src.shadowColor;
+		defaultEdgeColor = src.defaultEdgeColor;
+		edgeColor = src.edgeColor;
+		defaultBold = src.defaultBold;
+		bold = src.bold;
+		defaultFace = src.defaultFace;
+		userFace = src.userFace;
+		fontFace = src.fontFace;
+		defaultChColor = src.defaultChColor;
+		chColor = src.chColor;
+		defaultAntialiased = src.defaultAntialiased;
+		antialiased = src.antialiased;
+		vertical = src.vertical;
+		currentRuby = src.currentRuby;
+		lastDrawnCh = src.lastDrawnCh;
+		edgeExtent = src.edgeExtent;
+		edgeEmphasis = src.edgeEmphasis;
+		shadowOffsetX = src.shadowOffsetX;
+		shadowOffsetY = src.shadowOffsetY;
+		sizeChanged = src.sizeChanged;
+		nextClearFlag = src.nextClearFlag;
+		lineLayerBase = src.lineLayerBase;
+		lineLayerPos = src.lineLayerPos;
+		lineLayerLength = src.lineLayerLength;
+		lineLayerOriginX = src.lineLayerOriginX;
+		lineLayerOriginY = src.lineLayerOriginY;
+		align = src.align;
+		defaultAutoReturn = src.defaultAutoReturn;
+		autoReturn = src.autoReturn;
+		lineBreakGlyph = src.lineBreakGlyph;
+		lineBreakGlyphKey = src.lineBreakGlyphKey;
+		pageBreakGlyph = src.pageBreakGlyph;
+		pageBreakGlyphKey = src.pageBreakGlyphKey;
+		glyphFixedPosition = src.glyphFixedPosition;
+		glyphFixedLeft = src.glyphFixedLeft;
+		glyphFixedTop = src.glyphFixedTop;
+		draggable = src.draggable;
+		selClickLock = src.selClickLock;
+		lastMouseX = src.lastMouseX;
+		lastMouseY = src.lastMouseY;
+		// [end_assign_vars]
+	}
+
+	/* マウスメッセージ透過 */
+	function onMouseDown(x, y, button)
+	{
+		if(button == mbLeft && !selProcessLock)
+		{
+			super.onMouseDown(...);
+		}
+		else
+		{
+			parent.onMouseDown(...);
+		}
+	}
+
+	function setSelProcessLock(b)
+	{
+		// 選択のロックを設定
+		// 選択のロックを行うのは、いったん選択肢を選択したら
+		// 他の選択肢を選択できないようにするため
+		if(selProcessLock != b)
+		{
+			selProcessLock = b;
+			var lks = links;
+			for(var i = 0; i < numLinks; i++)
+			{
+				var item = lks[i];
+				var type = item.type;
+				if(type == ltButton) item.object.eventTransparent = b;
+//				else if(type == ltEdit || type == ltCheckBox) item.object.enabled = !b;
+				else if(type == ltEdit || type == ltCheckBox || type == ltSlider) item.object.enabled = !b;
+			}
+		}
+        if (selProcessLock) {
+            focusable = false;
+        } else {
+            if (numLinks > 0 || hasWheel() || hasClick()) {
+                focusable = true;
+            }
+        }
+	}
+}
